@@ -85,6 +85,20 @@
   <h2>디자인 채우기</h2>
   <div class="sub">사진·텍스트·색상·배지를 입력하면 왼쪽 미리보기에 바로 반영돼요. 정렬 모드에서 칸을 옮기면 초록색(가능)/빨간색(겹침, 불가)으로 표시돼요.</div>
 
+  <div class="card" style="background:#eef5ee;">
+    <div class="cardTitle" style="margin-bottom:8px;">💾 저장 · 불러오기</div>
+    <div class="row" style="margin-bottom:6px; color:#777; font-size:11px;">이 브라우저에 자동저장돼요 (서버 전송 없음). 다른 표를 만들 때 재사용하려면 프로젝트 파일로 저장하세요.</div>
+    <div class="row">
+      <button id="saveProjectBtn" class="miniBtn" style="padding:6px 10px;">📥 프로젝트 파일로 저장</button>
+      <button id="loadProjectBtn" class="miniBtn" style="padding:6px 10px;">📂 프로젝트 파일 불러오기</button>
+      <input type="file" id="loadProjectInput" accept=".json" style="display:none">
+    </div>
+    <div class="row">
+      <button id="clearAutosaveBtn" class="miniBtn" style="padding:6px 10px; background:#e74c3c; color:#fff;">자동저장 지우기</button>
+      <span id="autosaveStatus" style="font-size:10.5px; color:#999;"></span>
+    </div>
+  </div>
+
   <button id="resetAllBtn">↺ 전체 정렬 초기화</button>
 
   <details><summary>페어 정보</summary><div class="detailBody">
@@ -424,6 +438,7 @@ function draw(){
   drawWatermark();
   if(activeGuides.length) drawAlignGuides();
   syncOverlay();
+  scheduleAutosave();
 }
 function drawAlignGuides(){
   ctx.save();
@@ -484,6 +499,7 @@ function badgeMiniRow(badgeId){
 }
 function buildImageCards(){
   const cont = document.getElementById('imgCards');
+  cont.innerHTML='';
   ['main','costume','point1','point2','point3'].forEach(key=>{
     const card = document.createElement('div'); card.className='card';
     card.innerHTML = `<div class="cardHead"><div class="cardTitle">${IMG_LABELS[key]} (A / B)</div></div>`;
@@ -664,6 +680,7 @@ function drawPhotoEditingContainer(c){
 const COLOR_LABELS = {theme:'테마색',hair:'머리색',eye:'눈색',skin:'피부색'};
 function buildColorCards(){
   const cont = document.getElementById('colorCards');
+  cont.innerHTML='';
   ['theme','hair','eye','skin'].forEach(key=>{
     const card = document.createElement('div'); card.className='card';
     card.innerHTML = `<div class="cardHead"><div class="cardTitle">${COLOR_LABELS[key]} (A / B)</div></div>`;
@@ -712,6 +729,7 @@ const TEXT_FIELDS = [
 ];
 function buildTextInspector(mountId, fieldList){
   const cont = document.getElementById(mountId);
+  cont.innerHTML='';
   let currentId = fieldList[0].id;
   const wrap = document.createElement('div'); wrap.className='card';
   wrap.innerHTML = `
@@ -804,6 +822,7 @@ function syncMirrorStyle(id, prop, value){
 // ================= 패널: 캐릭터 이름 배지 (페어 정보 폴더 안에 배치) =================
 function buildNameBadgeCards(containerId){
   const cont = document.getElementById(containerId);
+  cont.innerHTML='';
   ['A_name','B_name'].forEach(id=>{
     const card = document.createElement('div'); card.className='card';
     card.innerHTML = `<div class="cardHead"><div class="cardTitle">${id.startsWith('A')?'A':'B'} 캐릭터 이름 배지</div></div>`;
@@ -1038,15 +1057,125 @@ document.getElementById('fontFileInput').addEventListener('change', e=>{
   e.target.value='';
 });
 
-buildTextInspector('pairTextInspector', PAIR_TEXT_FIELDS);
-buildNameBadgeCards('pairInfoCards');
-buildImageCards(); buildColorCards();
-buildTextInspector('textInspector', TEXT_FIELDS);
-buildDecoPanel();
-buildOverlay();
-window.addEventListener('load', fitToScreen);
-setTimeout(fitToScreen, 50);
-draw();
+function buildAllPanels(){
+  buildTextInspector('pairTextInspector', PAIR_TEXT_FIELDS);
+  buildNameBadgeCards('pairInfoCards');
+  buildImageCards(); buildColorCards();
+  buildTextInspector('textInspector', TEXT_FIELDS);
+  buildDecoPanel();
+  buildOverlay();
+  draw();
+}
+
+// ================= 프로젝트 저장/불러오기 (서버 전송 없음, 이 브라우저에만) =================
+const AUTOSAVE_KEY = 'chimyeon_sheet_maker_autosave_v1';
+
+function serializeProjectData(){
+  const data = {containers:{}, badges:{}, decorations:{}, images:{}, watermarkCorner};
+  Object.keys(containers).forEach(id=>{
+    const {__id, ...rest} = containers[id];
+    data.containers[id] = rest;
+  });
+  Object.keys(badges).forEach(id=>{ data.badges[id] = {...badges[id]}; });
+  Object.keys(decorations).forEach(id=>{
+    const d = decorations[id];
+    data.decorations[id] = {x:d.x, y:d.y, w:d.w, h:d.h, imgSrc: d.img ? d.img.src : null};
+  });
+  Object.keys(state.images).forEach(id=>{ data.images[id] = state.images[id].src; });
+  return data;
+}
+
+function applyProjectData(data){
+  Object.keys(data.containers||{}).forEach(id=>{ if(containers[id]) Object.assign(containers[id], data.containers[id]); });
+  Object.keys(data.badges||{}).forEach(id=>{ if(badges[id]) Object.assign(badges[id], data.badges[id]); });
+  if(data.watermarkCorner) watermarkCorner = data.watermarkCorner;
+  Object.keys(decorations).forEach(k=>delete decorations[k]);
+  Object.keys(state.images).forEach(k=>delete state.images[k]);
+  const tasks = [];
+  Object.keys(data.images||{}).forEach(id=>{
+    tasks.push(new Promise(res=>{
+      const img = new Image();
+      img.onload=()=>{ state.images[id]=img; res(); };
+      img.onerror=res;
+      img.src = data.images[id];
+    }));
+  });
+  Object.keys(data.decorations||{}).forEach(id=>{
+    const d = data.decorations[id];
+    tasks.push(new Promise(res=>{
+      if(!d.imgSrc){ res(); return; }
+      const img = new Image();
+      img.onload=()=>{ decorations[id]={x:d.x,y:d.y,w:d.w,h:d.h,img}; res(); };
+      img.onerror=res;
+      img.src = d.imgSrc;
+    }));
+  });
+  return Promise.all(tasks);
+}
+
+let autosaveTimer = null;
+function scheduleAutosave(){
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(()=>{
+    try{
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(serializeProjectData()));
+      const s = document.getElementById('autosaveStatus');
+      if(s){ s.textContent = '자동저장됨 · ' + new Date().toLocaleTimeString(); }
+    }catch(err){
+      const s = document.getElementById('autosaveStatus');
+      if(s){ s.textContent = '자동저장 실패 (용량 초과 가능성)'; }
+    }
+  }, 800);
+}
+
+document.getElementById('saveProjectBtn').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(serializeProjectData())], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = '침연외관표_프로젝트.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('loadProjectBtn').addEventListener('click', ()=>document.getElementById('loadProjectInput').click());
+document.getElementById('loadProjectInput').addEventListener('change', e=>{
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    try{
+      const data = JSON.parse(ev.target.result);
+      applyProjectData(data).then(buildAllPanels);
+    }catch(err){
+      alert('프로젝트 파일을 읽을 수 없어요. 이 사이트에서 저장한 .json 파일인지 확인해주세요.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+});
+document.getElementById('clearAutosaveBtn').addEventListener('click', ()=>{
+  if(confirm('이 브라우저에 저장된 자동저장 데이터를 지울까요? (지금 화면 내용은 유지됩니다)')){
+    localStorage.removeItem(AUTOSAVE_KEY);
+    document.getElementById('autosaveStatus').textContent='자동저장 데이터 삭제됨';
+  }
+});
+
+// ================= 부팅: 자동저장 복원 후 패널 생성 =================
+(function boot(){
+  let raw = null;
+  try{ raw = localStorage.getItem(AUTOSAVE_KEY); }catch(e){}
+  if(raw){
+    try{
+      const data = JSON.parse(raw);
+      applyProjectData(data).then(buildAllPanels).catch(buildAllPanels);
+      document.getElementById('autosaveStatus').textContent = '이전 작업을 불러왔어요';
+      window.addEventListener('load', fitToScreen);
+      setTimeout(fitToScreen, 50);
+      return;
+    }catch(e){ console.warn('autosave restore failed', e); }
+  }
+  buildAllPanels();
+  window.addEventListener('load', fitToScreen);
+  setTimeout(fitToScreen, 50);
+})();
 
 document.getElementById('downloadBtn').addEventListener('click', ()=>{
   const link=document.createElement('a'); link.download='창작외관표_완성.png'; link.href=canvas.toDataURL('image/png'); link.click();
