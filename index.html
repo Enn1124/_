@@ -722,8 +722,9 @@ function syncBadgeColorToSwatch(containerId, fillColor){
 }
 
 // ================= 패널: 텍스트 칸 (선택형 통합 인스펙터) =================
-const PAIR_TEXT_FIELDS = [{id:'pairName', label:'페어명'}, {id:'A_affil', label:'A 소속·신체정보'}, {id:'B_affil', label:'B 소속·신체정보'}];
+const PAIR_TEXT_FIELDS = [{id:'pairName', label:'페어명'}];
 const TEXT_FIELDS = [
+  {id:'A_affil', label:'A 소속·신체정보'}, {id:'B_affil', label:'B 소속·신체정보'},
   {id:'A_info', label:'A 성격·포인트·NG'}, {id:'B_info', label:'B 성격·포인트·NG'},
   {id:'relation', label:'관계성 내용'},
 ];
