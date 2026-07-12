@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>침연 외관표 메이커</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  :root{ --bg:#f5f3ef; --panel:#ffffff; --ink:#2b2b2b; --sub:#8a8378; --accent:#8a7350; --line:#e4ddd2; }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif; background:var(--bg); color:var(--ink); display:flex; min-height:100vh;}
+  #left{flex:1; display:flex; flex-direction:column; min-width:0;}
+  #toolbar{display:flex; align-items:center; gap:14px; padding:10px 16px; background:#fff; border-bottom:1px solid var(--line); flex-wrap:wrap;}
+  #toolbar label{font-size:12.5px; display:flex; align-items:center; gap:6px;}
+  #toolbar button{border:1px solid var(--line); background:#faf8f4; border-radius:7px; padding:6px 10px; font-size:12px; cursor:pointer;}
+  #toolbar .hint{font-size:11.5px; color:var(--sub);}
+  #canvasWrap{flex:1; position:relative; overflow:hidden; background:#e9e6df; cursor:grab;}
+  #canvasWrap.panning{cursor:grabbing;}
+  #viewport{position:absolute; top:0; left:0; transform-origin:0 0;}
+  #stageOuter{position:relative;}
+  #stage{display:block;}
+  #overlay{position:absolute; top:0; left:0; width:2500px; height:1000px;}
+  .box{position:absolute; box-sizing:border-box; cursor:move; border:1.5px dashed transparent;}
+  .box.g-container{border-color:rgba(138,115,80,.55);}
+  .box.g-decoration{border-color:rgba(41,128,185,.55);}
+  .box.g-badge{border-color:rgba(192,57,43,.6);}
+  .box.valid{border-color:#27ae60 !important; border-style:solid; background:rgba(39,174,96,.10);}
+  .box.invalid{border-color:#e74c3c !important; border-style:solid; background:rgba(231,76,60,.14);}
+  #canvasWrap:not(.arranging) .box{display:none;}
+  .handle{position:absolute; width:14px; height:14px; right:-7px; bottom:-7px; background:#c0392b; border-radius:50%; cursor:nwse-resize;}
+
+  #panel{width:420px; min-width:380px; background:var(--panel); border-left:1px solid var(--line); padding:16px; overflow-y:auto; max-height:100vh;}
+  h2{font-size:16px; margin:0 0 4px;}
+  .sub{color:var(--sub); font-size:12px; margin-bottom:12px; line-height:1.5;}
+  details{border:1px solid var(--line); border-radius:10px; margin-bottom:10px; background:#fff;}
+  details > summary{cursor:pointer; padding:10px 12px; font-weight:700; font-size:13px; color:var(--accent); list-style:none;}
+  details > summary::-webkit-details-marker{display:none;}
+  details > summary:before{content:'▸ '; }
+  details[open] > summary:before{content:'▾ '; }
+  .detailBody{padding:6px 12px 12px;}
+  .card{border:1px solid var(--line); border-radius:8px; padding:9px 10px; margin-bottom:8px; background:#fbfaf7;}
+  .cardHead{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .cardTitle{font-size:12px; font-weight:700; color:#444;}
+  .miniBtn{border:none; background:#ddd; color:#555; border-radius:5px; padding:2px 7px; font-size:10.5px; cursor:pointer;}
+  .miniBtn.active{background:#2980b9; color:#fff;}
+  .miniBtn:hover{background:#ccc;}
+  .row{display:flex; align-items:center; gap:6px; margin-bottom:5px; flex-wrap:wrap;}
+  .row .lbl{font-size:10.5px; color:#999; width:auto; margin-right:2px;}
+  input[type=file]{font-size:10.5px; flex:1; min-width:0;}
+  input[type=color]{width:26px; height:24px; border:1px solid var(--line); border-radius:5px; padding:0; cursor:pointer;}
+  input[type=text].hex{width:66px; font-size:10.5px; padding:2px 4px; border:1px solid var(--line); border-radius:5px;}
+  input[type=text].txt, textarea{width:100%; border:1px solid var(--line); border-radius:7px; padding:6px; font-size:12.5px; font-family:inherit; resize:vertical; margin-bottom:5px;}
+  textarea{min-height:46px;}
+  input[type=number].bw{width:40px; font-size:10.5px; padding:2px 3px; border:1px solid var(--line); border-radius:5px;}
+  button.pill{border:1px solid var(--line); background:#fff; border-radius:6px; padding:3px 7px; font-size:10.5px; cursor:pointer; color:#444;}
+  button.pill.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+  select.tiny{border:1px solid var(--line); border-radius:6px; padding:3px 5px; font-size:10.5px;}
+  #downloadBtn{width:100%; padding:12px; background:var(--accent); color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; margin-top:6px;}
+  #resetAllBtn{width:100%; padding:9px; background:#7f8c8d; color:#fff; border:none; border-radius:8px; font-size:12px; cursor:pointer; margin-bottom:10px;}
+  #addDecoBtn{width:100%; padding:8px; background:#2980b9; color:#fff; border:none; border-radius:8px; font-size:12px; cursor:pointer; margin-bottom:8px;}
+  .decoItem{display:flex; align-items:center; justify-content:space-between; background:#faf8f4; border:1px solid var(--line); border-radius:8px; padding:6px 9px; margin-bottom:5px; font-size:11.5px;}
+  .decoItem button{border:none; background:#e74c3c; color:#fff; border-radius:6px; padding:3px 7px; font-size:10.5px; cursor:pointer;}
+
+  .peHandle{position:absolute; width:30px; height:30px; background:#8a7350; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; user-select:none; box-shadow:0 2px 6px rgba(0,0,0,.3); z-index:10;}
+</style>
+</head>
+<body>
+
+<div id="left">
+  <div id="toolbar">
+    <label><input type="checkbox" id="arrangeChk"> 🖱 정렬 모드</label>
+    <button id="fitBtn">화면에 맞추기</button>
+    <span class="hint">휠: 확대/축소 (마우스 위치 기준) · 드래그: 이동</span>
+  </div>
+  <div id="canvasWrap">
+    <div id="viewport">
+      <div id="stageOuter">
+        <canvas id="stage" width="2500" height="1000"></canvas>
+        <div id="overlay"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="panel">
+  <h2>디자인 채우기</h2>
+  <div class="sub">사진·텍스트·색상·배지를 입력하면 왼쪽 미리보기에 바로 반영돼요. 정렬 모드에서 칸을 옮기면 초록색(가능)/빨간색(겹침, 불가)으로 표시돼요.</div>
+
+  <button id="resetAllBtn">↺ 전체 정렬 초기화</button>
+
+  <details><summary>페어 정보</summary><div class="detailBody">
+    <div class="row" style="margin-bottom:10px;">
+      <button id="addFontBtnPair" class="miniBtn" style="padding:5px 10px;">+ 내 기기의 폰트 파일 추가</button>
+      <input type="file" id="fontFileInputPair" accept=".ttf,.otf,.woff,.woff2" style="display:none">
+    </div>
+    <div id="pairTextInspector"></div>
+    <div id="pairInfoCards"></div>
+  </div></details>
+  <details><summary>사진 칸</summary><div class="detailBody" id="imgCards"></div></details>
+  <details><summary>색상 칸</summary><div class="detailBody" id="colorCards"></div></details>
+  <details><summary>텍스트 칸</summary><div class="detailBody">
+    <div class="row" style="margin-bottom:10px;">
+      <button id="addFontBtn" class="miniBtn" style="padding:5px 10px;">+ 내 기기의 폰트 파일 추가</button>
+      <input type="file" id="fontFileInput" accept=".ttf,.otf,.woff,.woff2" style="display:none">
+    </div>
+    <div id="textInspector"></div>
+  </div></details>
+  <details><summary>© 저작권 마크</summary>
+    <div class="detailBody">
+      <div class="sub" style="margin-bottom:8px;">고정 문구(ⓒ緣 (@fushimamol))이며 수정·삭제는 불가능해요. 위치만 4곳 중에서 고를 수 있어요.</div>
+      <div class="row">
+        <button class="pill" data-wm="top-left">왼쪽 상단</button>
+        <button class="pill" data-wm="top-right">오른쪽 상단</button>
+        <button class="pill" data-wm="bottom-left">왼쪽 하단</button>
+        <button class="pill" data-wm="bottom-right">오른쪽 하단</button>
+      </div>
+    </div>
+  </details>
+
+  <details><summary>✨ 장식 이미지</summary>
+    <div class="detailBody">
+      <button id="addDecoBtn">+ 이미지 추가</button>
+      <input type="file" id="decoFileInput" accept="image/*" style="display:none">
+      <div id="decoList"></div>
+    </div>
+  </details>
+
+  <button id="downloadBtn">이미지로 저장 (PNG)</button>
+</div>
+
+<script>
+const AXIS=1250, CW=2500, CH=1000, GRID=25;
+
+function mirrorBox(b){ return {x:2*AXIS-(b.x+b.w), y:b.y, w:b.w, h:b.h}; }
+function snap(v){ return Math.round(v/GRID)*GRID; }
+function contrastColor(hex){
+  const c=hex.replace('#',''); const r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
+  return (0.299*r+0.587*g+0.114*b)>150 ? '#1a1a1a' : '#ffffff';
+}
+function roundRectPath(ctx,x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function overlapBoxes(a,b){ return !(a.x+a.w<=b.x||b.x+b.w<=a.x||a.y+a.h<=b.y||b.y+b.h<=a.y); }
+function wrapText(ctx,text,maxWidth){
+  const paras=String(text).split('\n'); const out=[];
+  paras.forEach(p=>{
+    const words=p.split(' '); let line='';
+    words.forEach(w=>{ const t=line?line+' '+w:w; if(ctx.measureText(t).width>maxWidth&&line){out.push(line);line=w;} else line=t; });
+    out.push(line);
+  });
+  return out;
+}
+function fontFamilyCSS(fam){
+  if(fam==='serif') return "'Batang','Noto Serif KR',serif";
+  if(fam==='round') return "'Gyeonggi Title','Malgun Gothic','Apple SD Gothic Neo',sans-serif";
+  if(fam==='gothic') return "'Malgun Gothic','Apple SD Gothic Neo',sans-serif";
+  if(CUSTOM_FONTS.includes(fam)) return `"${fam}","Malgun Gothic",sans-serif`;
+  return "'Malgun Gothic','Apple SD Gothic Neo',sans-serif";
+}
+const CUSTOM_FONTS = [];
+async function handleFontUpload(file){
+  try{
+    const buf = await file.arrayBuffer();
+    let base = file.name.replace(/\.[^/.]+$/,'').replace(/[^a-zA-Z0-9가-힣_-]/g,'_') || 'CustomFont';
+    let famName = base, i=1;
+    while(CUSTOM_FONTS.includes(famName)){ famName = base+'_'+i; i++; }
+    const face = new FontFace(famName, buf);
+    await face.load();
+    document.fonts.add(face);
+    CUSTOM_FONTS.push(famName);
+    document.querySelectorAll('[data-k=family]').forEach(sel=>{
+      const opt = document.createElement('option'); opt.value=famName; opt.textContent='📁 '+file.name;
+      sel.appendChild(opt);
+    });
+    draw();
+  } catch(err){
+    alert('폰트를 불러오지 못했어요. .ttf/.otf/.woff 파일인지 확인해주세요.');
+  }
+}
+function fitFontSize(ctx, text, boxW, boxH, weight){
+  let size = Math.floor(boxH*0.55);
+  size = Math.max(8, Math.min(size, 40));
+  ctx.font = `${weight} ${size}px "Malgun Gothic",sans-serif`;
+  const pad = 10;
+  while(size>7 && ctx.measureText(text).width > boxW-pad){
+    size--; ctx.font = `${weight} ${size}px "Malgun Gothic",sans-serif`;
+  }
+  return size;
+}
+
+// ================= 컨테이너 =================
+const containers = {};
+function baseBorder(){ return {borderColor:'#333333', borderWidth:2.5, showBorder:true}; }
+function baseImgAdjust(){ return {imgScale:1, imgOffsetX:0, imgOffsetY:0, imgRotation:0}; }
+function addImagePair(id,x,y,w,h){
+  containers['A_'+id]={kind:'image',side:'A',mirrorId:'B_'+id,x,y,w,h,...baseBorder(),...baseImgAdjust()};
+  containers['B_'+id]={kind:'image',side:'B',mirrorId:'A_'+id,...mirrorBox({x,y,w,h}),...baseBorder(),...baseImgAdjust()};
+}
+function addColorPair(id,x,y,w,h,fillA,fillB){
+  containers['A_'+id]={kind:'color',side:'A',mirrorId:'B_'+id,x,y,w,h,fill:fillA,...baseBorder()};
+  containers['B_'+id]={kind:'color',side:'B',mirrorId:'A_'+id,...mirrorBox({x,y,w,h}),fill:fillB,...baseBorder()};
+}
+function addTextPair(id,x,y,w,h,opt={}){
+  const base={kind:'text',value:'',placeholder:opt.placeholder||'',multiline:!!opt.multiline,size:opt.size||14,
+    lineHeight:opt.lineHeight||1.4,align:opt.align||'left',weight:opt.weight||400,family:opt.family||'gothic',
+    underline:false,color:opt.color||'#2b2b2b',...baseBorder()};
+  containers['A_'+id]={...base,side:'A',mirrorId:'B_'+id,x,y,w,h};
+  containers['B_'+id]={...base,side:'B',mirrorId:'A_'+id,...mirrorBox({x,y,w,h})};
+}
+function addTextCenter(id,x,y,w,h,opt={}){
+  containers[id]={kind:'text',side:'center',mirrorId:null,x,y,w,h,value:'',placeholder:opt.placeholder||'',
+    multiline:!!opt.multiline,size:opt.size||14,lineHeight:opt.lineHeight||1.4,align:opt.align||'left',
+    weight:opt.weight||400,family:opt.family||'gothic',underline:false,color:opt.color||'#2b2b2b',...baseBorder()};
+}
+addImagePair('costume',102,80,251,500);
+addImagePair('main',387,80,300,500);
+addImagePair('point1',101,632,215,270);
+addImagePair('point2',346,632,215,270);
+addImagePair('point3',591,632,215,270);
+addColorPair('theme',825,633,60,60,'#ffffff','#ffffff');
+addColorPair('hair',825,702,60,60,'#ffffff','#ffffff');
+addColorPair('eye',825,771,60,60,'#ffffff','#ffffff');
+addColorPair('skin',825,840,60,60,'#ffffff','#ffffff');
+addTextCenter('pairName',1000,14,500,60,{placeholder:'페어명을 입력하세요',size:30,align:'center',weight:700});
+addTextPair('affil',746,153,273,56,{placeholder:'<장르> 소속 등\n성별 / 키 / 체격 / 나이',size:13,align:'left',multiline:true,color:'#555555'});
+addTextPair('info',746,225,273,300,{placeholder:'#키워드\n성격 요약\n- 외모 포인트\nNG사항',size:13,align:'left',multiline:true});
+addTextCenter('relation',933,658,630,220,{placeholder:'두 캐릭터의 관계를 자유롭게 적어주세요',size:15,align:'left',multiline:true});
+
+// ================= 배지 (컨테이너에 상대좌표로 종속) =================
+// offsetX/offsetY = 부모 컨테이너 (x,y) 기준 상대좌표. w,h = 배지 크기(글자는 크기에 비례해 자동 조정).
+const badges = {};
+function addBadge(id, parentId, offsetX, offsetY, w, h, text, bgColor, textColor){
+  badges[id] = {parentId, offsetX, offsetY, w, h, text, bgColor, textColor};
+}
+function initImageCaption(key,label,offsetX,offsetY,w,h){
+  ['A','B'].forEach(side=>{
+    const pid = side+'_'+key;
+    addBadge(side+'_'+key+'_cap', pid, offsetX, offsetY, w, h, label, '#000000', '#ffffff');
+  });
+}
+function initColorCaption(key,label,offsetX,offsetY,w,h){
+  ['A','B'].forEach(side=>{
+    const pid = side+'_'+key; const p = containers[pid];
+    addBadge(side+'_'+key+'_cap', pid, offsetX, offsetY, w, h, label, p.fill, contrastColor(p.fill));
+  });
+}
+// 원본 PSD 실측: 캡션 배지 크기/위치는 각 이미지 칸 원점 기준 상대좌표 (원본 그대로)
+initImageCaption('costume','의상', 28, 473, 200, 46);
+initImageCaption('main','메인 이미지', 50, 473, 200, 46);
+initImageCaption('point1','포인트1', 41, 246, 138, 46);
+initImageCaption('point2','포인트2', 45, 246, 138, 46);
+initImageCaption('point3','포인트3', 43, 246, 138, 46);
+// 원본 PSD 실측: 색상 캡션은 스와치(60x60) 하단쪽에 위치, 폭은 텍스트에 맞춤, 좌우 중앙
+initColorCaption('theme','테마색', 8, 39, 44, 16);
+initColorCaption('hair','머리색', 9, 39, 43, 16);
+initColorCaption('eye','눈색', 16, 39, 29, 16);
+initColorCaption('skin','피부색', 8, 38, 44, 16);
+{
+  // 원본 PSD 실측: 관계성 박스(670x292) 상단 중앙 안쪽에 위치 -> 현재 박스(630x220) 비율로 환산
+  const p = containers['relation'];
+  const w = 110, h = 20;
+  addBadge('relation_cap','relation', (p.w-w)/2, 10, w, h, '참고용 관계성', '#000000', '#ffffff');
+}
+// 캐릭터 이름 배지 (원본 PSD 실측: 250x46, 정보란 상단 중앙)
+{
+  const pa = containers['A_info']; addBadge('A_name', 'A_info', (pa.w-250)/2, -134, 250, 46, '', '#000000', '#ffffff');
+  const pb = containers['B_info']; addBadge('B_name', 'B_info', (pb.w-250)/2, -134, 250, 46, '', '#000000', '#ffffff');
+}
+
+// 초기 상태 스냅샷 (개별/전체 초기화용) - 배치/스타일 관련 필드만 저장
+function snapshotLayout(){
+  const c={}, b={};
+  Object.keys(containers).forEach(id=>{ const o=containers[id]; c[id]={x:o.x,y:o.y,w:o.w,h:o.h,borderColor:o.borderColor,borderWidth:o.borderWidth,showBorder:o.showBorder}; });
+  Object.keys(badges).forEach(id=>{ const o=badges[id]; b[id]={offsetX:o.offsetX,offsetY:o.offsetY,w:o.w,h:o.h}; });
+  return {c,b};
+}
+const INITIAL_LAYOUT = snapshotLayout();
+function resetContainer(id){
+  const init = INITIAL_LAYOUT.c[id]; if(!init) return;
+  Object.assign(containers[id], init); draw();
+}
+function resetBadge(id){
+  const init = INITIAL_LAYOUT.b[id]; if(!init) return;
+  Object.assign(badges[id], init); draw();
+}
+function resetAllLayout(){
+  Object.keys(containers).forEach(resetContainerSilent);
+  Object.keys(badges).forEach(resetBadgeSilent);
+  draw();
+}
+function resetContainerSilent(id){ const init=INITIAL_LAYOUT.c[id]; if(init) Object.assign(containers[id],init); }
+function resetBadgeSilent(id){ const init=INITIAL_LAYOUT.b[id]; if(init) Object.assign(badges[id],init); }
+
+// ================= 장식 이미지 =================
+const decorations = {}; let decoCounter=0;
+
+// ================= 렌더링 =================
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+const state = { images:{} };
+
+function drawGrid(){
+  ctx.save(); ctx.strokeStyle='rgba(41,128,185,0.15)'; ctx.lineWidth=1;
+  for(let x=0;x<=CW;x+=GRID){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,CH); ctx.stroke(); }
+  for(let y=0;y<=CH;y+=GRID){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(CW,y); ctx.stroke(); }
+  ctx.restore();
+}
+function drawContainer(c){
+  ctx.save();
+  roundRectPath(ctx,c.x,c.y,c.w,c.h,10);
+  if(c.kind==='image'){
+    ctx.fillStyle='#ffffff'; ctx.fill(); ctx.clip();
+    const img = state.images[c.__id];
+    if(img){
+      const rot = ((c.imgRotation||0) % 360) * Math.PI/180;
+      const baseScale = Math.max(c.w/img.width, c.h/img.height);
+      const scale = baseScale * (c.imgScale||1);
+      ctx.save();
+      ctx.translate(c.x+c.w/2+(c.imgOffsetX||0), c.y+c.h/2+(c.imgOffsetY||0));
+      ctx.rotate(rot);
+      ctx.drawImage(img, -img.width*scale/2, -img.height*scale/2, img.width*scale, img.height*scale);
+      ctx.restore();
+    } else {
+      ctx.fillStyle='#b9b2a3'; ctx.font='400 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('+ 사진 추가', c.x+c.w/2, c.y+c.h/2);
+    }
+    ctx.restore();
+    if(c.showBorder){ ctx.save(); roundRectPath(ctx,c.x,c.y,c.w,c.h,10); ctx.lineWidth=c.borderWidth; ctx.strokeStyle=c.borderColor; ctx.stroke(); ctx.restore(); }
+  } else if(c.kind==='color'){
+    ctx.fillStyle=c.fill; ctx.fill();
+    if(c.showBorder){ ctx.lineWidth=c.borderWidth; ctx.strokeStyle=c.borderColor; ctx.stroke(); }
+    ctx.restore();
+  } else {
+    ctx.fillStyle='#fff'; ctx.globalAlpha=0.001; ctx.fill(); ctx.globalAlpha=1;
+    if(c.showBorder){ ctx.lineWidth=c.borderWidth; ctx.strokeStyle=c.borderColor; ctx.stroke(); }
+    ctx.restore();
+    const text=c.value||'';
+    if(text){
+      ctx.save();
+      ctx.font=`${c.weight} ${c.size}px ${fontFamilyCSS(c.family)}`;
+      ctx.fillStyle=c.color; ctx.textBaseline='top'; ctx.textAlign=c.align;
+      const pad=10, maxW=c.w-pad*2;
+      const lines=wrapText(ctx,text,maxW);
+      let anchorX=c.x+pad; if(c.align==='center') anchorX=c.x+c.w/2; if(c.align==='right') anchorX=c.x+c.w-pad;
+      const lh=c.size*c.lineHeight;
+      lines.forEach((line,i)=>{
+        const yy=c.y+pad+i*lh; if(yy>c.y+c.h-pad) return;
+        ctx.fillText(line,anchorX,yy);
+        if(c.underline){
+          const wdt=ctx.measureText(line).width; let ux=anchorX;
+          if(c.align==='center') ux-=wdt/2; if(c.align==='right') ux-=wdt;
+          ctx.beginPath(); ctx.moveTo(ux,yy+c.size*1.05); ctx.lineTo(ux+wdt,yy+c.size*1.05);
+          ctx.strokeStyle=c.color; ctx.lineWidth=Math.max(1,c.size*0.06); ctx.stroke();
+        }
+      });
+      ctx.restore();
+    }
+  }
+}
+function badgeAbsBox(b){
+  const p = containers[b.parentId];
+  return {x:p.x+b.offsetX, y:p.y+b.offsetY, w:b.w, h:b.h};
+}
+function drawBadge(b){
+  const box = badgeAbsBox(b);
+  ctx.save();
+  roundRectPath(ctx, box.x, box.y, box.w, box.h, box.h/2);
+  ctx.fillStyle = b.bgColor; ctx.fill();
+  const text = b.text || '';
+  const displayText = text || (b.id_isName ? '' : '');
+  ctx.font = `700 10px sans-serif`;
+  const size = fitFontSize(ctx, text||'이름', box.w, box.h, 700);
+  ctx.font = `700 ${size}px "Malgun Gothic",sans-serif`;
+  ctx.fillStyle = text ? b.textColor : 'rgba(255,255,255,0.55)';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text || '이름', box.x+box.w/2, box.y+box.h/2+1);
+  ctx.restore();
+}
+function drawDecoration(d){
+  ctx.save();
+  if(d.img){
+    const scale=Math.max(d.w/d.img.width, d.h/d.img.height);
+    const dw=d.img.width*scale, dh=d.img.height*scale;
+    ctx.beginPath(); ctx.rect(d.x,d.y,d.w,d.h); ctx.clip();
+    ctx.drawImage(d.img, d.x+(d.w-dw)/2, d.y+(d.h-dh)/2, dw, dh);
+  }
+  ctx.restore();
+}
+// ================= 저작권 마크 (내용 고정, 위치만 4곳 중 선택) =================
+const WATERMARK_TEXT = 'ⓒ緣 (@fushimamol)';
+let watermarkCorner = 'top-right'; // 'top-right' | 'top-left' | 'bottom-left' | 'bottom-right'
+function drawWatermark(){
+  ctx.save();
+  ctx.font = '600 20px "Malgun Gothic",sans-serif';
+  const padX=16, padY=12, margin=18;
+  const textW = ctx.measureText(WATERMARK_TEXT).width;
+  const boxW = textW+padX*2, boxH = 34;
+  let x,y;
+  if(watermarkCorner==='top-right'){ x=CW-margin-boxW; y=margin; }
+  else if(watermarkCorner==='top-left'){ x=margin; y=margin; }
+  else if(watermarkCorner==='bottom-left'){ x=margin; y=CH-margin-boxH; }
+  else { x=CW-margin-boxW; y=CH-margin-boxH; }
+  roundRectPath(ctx, x, y, boxW, boxH, 8);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(WATERMARK_TEXT, x+boxW/2, y+boxH/2+1);
+  ctx.restore();
+}
+
+function draw(){
+  ctx.clearRect(0,0,CW,CH);
+  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,CW,CH);
+  if(arrangeMode) drawGrid();
+  Object.keys(containers).forEach(id=>containers[id].__id=id);
+  Object.values(containers).forEach(c=>{
+    if(c.__id===editingPhotoId) drawPhotoEditingContainer(c); else drawContainer(c);
+  });
+  Object.values(decorations).forEach(drawDecoration);
+  Object.values(badges).forEach(drawBadge);
+  drawWatermark();
+  if(activeGuides.length) drawAlignGuides();
+  syncOverlay();
+}
+function drawAlignGuides(){
+  ctx.save();
+  ctx.strokeStyle='rgba(231,76,60,0.9)'; ctx.lineWidth=2; ctx.setLineDash([10,6]);
+  activeGuides.forEach(g=>{
+    ctx.beginPath();
+    if(g.type==='v'){ ctx.moveTo(g.pos,0); ctx.lineTo(g.pos,CH); } else { ctx.moveTo(0,g.pos); ctx.lineTo(CW,g.pos); }
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+// ================= 패널: 사진 칸 =================
+const IMG_LABELS = {costume:'의상',main:'메인',point1:'포인트1',point2:'포인트2',point3:'포인트3'};
+function borderRow(id, obj, redraw){
+  const row = document.createElement('div'); row.className='row';
+  row.innerHTML = `
+    <span class="lbl">테두리</span>
+    <input type="checkbox" data-bord="show" data-id="${id}" ${obj.showBorder?'checked':''}>
+    <input type="color" data-bord="color" data-id="${id}" value="${obj.borderColor}">
+    <input type="number" class="bw" data-bord="width" data-id="${id}" min="0" max="12" step="0.5" value="${obj.borderWidth}">
+  `;
+  row.querySelector('[data-bord=show]').addEventListener('change', e=>{ obj.showBorder=e.target.checked; redraw(); });
+  row.querySelector('[data-bord=color]').addEventListener('input', e=>{ obj.borderColor=e.target.value; redraw(); });
+  row.querySelector('[data-bord=width]').addEventListener('input', e=>{ obj.borderWidth=parseFloat(e.target.value)||0; redraw(); });
+  return row;
+}
+function badgeMiniRow(badgeId){
+  const b = badges[badgeId]; if(!b) return document.createElement('div');
+  const wrap = document.createElement('div');
+  const isName = badgeId.endsWith('_name');
+  const isColorCap = ['A_theme_cap','B_theme_cap','A_hair_cap','B_hair_cap','A_eye_cap','B_eye_cap','A_skin_cap','B_skin_cap'].includes(badgeId);
+  const colorRow = isColorCap
+    ? `<div class="row"><span class="lbl" style="color:#aaa;">배지색은 왼쪽 색상칸과 자동으로 같아요</span></div>`
+    : `<div class="row"><span class="lbl">배지색</span><input type="color" data-bcol="bg" data-id="${badgeId}" value="${b.bgColor}">
+       <span class="lbl">글자색</span><input type="color" data-bcol="fg" data-id="${badgeId}" value="${b.textColor}">
+       <button class="miniBtn" data-badgereset="${badgeId}">배지 초기화</button></div>`;
+  wrap.innerHTML = `<div class="row"><span class="lbl">${isName?'이름 입력':'캡션'}</span>
+    <input type="text" class="txt" style="margin:0;flex:1" data-badgetxt="${badgeId}" value="${b.text}" placeholder="${isName?'캐릭터 이름':'캡션 텍스트'}"></div>
+    ${colorRow}
+    <div class="row"><span class="lbl">배지 정렬(칸 기준)</span>
+    <button class="pill" data-balign="left" data-id="${badgeId}">왼쪽</button>
+    <button class="pill" data-balign="center" data-id="${badgeId}">중앙</button>
+    <button class="pill" data-balign="right" data-id="${badgeId}">오른쪽</button></div>`;
+  wrap.querySelector(`[data-badgetxt]`).addEventListener('input', e=>{ b.text=e.target.value; draw(); });
+  wrap.querySelectorAll(`[data-bcol]`).forEach(inp=>inp.addEventListener('input', e=>{
+    if(inp.dataset.bcol==='bg') b.bgColor=e.target.value; else b.textColor=e.target.value; draw();
+  }));
+  if(!isColorCap) wrap.querySelector(`[data-badgereset]`).addEventListener('click', ()=>resetBadge(badgeId));
+  wrap.querySelectorAll(`[data-balign]`).forEach(btn=>btn.addEventListener('click', ()=>{
+    const p = containers[b.parentId];
+    if(btn.dataset.balign==='left') b.offsetX = 0;
+    if(btn.dataset.balign==='center') b.offsetX = p.w/2 - b.w/2;
+    if(btn.dataset.balign==='right') b.offsetX = p.w - b.w;
+    draw();
+  }));
+  return wrap;
+}
+function buildImageCards(){
+  const cont = document.getElementById('imgCards');
+  ['main','costume','point1','point2','point3'].forEach(key=>{
+    const card = document.createElement('div'); card.className='card';
+    card.innerHTML = `<div class="cardHead"><div class="cardTitle">${IMG_LABELS[key]} (A / B)</div></div>`;
+    ['A','B'].forEach(side=>{
+      const id = side+'_'+key; const c = containers[id];
+      const sub = document.createElement('div'); sub.style.marginBottom='6px'; sub.style.paddingBottom='6px'; sub.style.borderBottom='1px dashed #eee';
+      sub.innerHTML = `<div class="row"><span class="lbl">${side}측 사진</span><input type="file" accept="image/*" data-imgfor="${id}"></div>
+        <div class="row"><button class="miniBtn" data-editphoto="${id}">✏️ 사진 편집</button>
+        <button class="miniBtn" data-photoreset="${id}">사진 조정 초기화</button>
+        <button class="miniBtn" data-creset="${id}">칸 초기화</button></div>`;
+      sub.appendChild(borderRow(id, c, draw));
+      sub.appendChild(badgeMiniRow(side+'_'+key+'_cap'));
+      card.appendChild(sub);
+    });
+    cont.appendChild(card);
+  });
+  cont.querySelectorAll('[data-imgfor]').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      const file=e.target.files[0]; if(!file) return;
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const img=new Image();
+        img.onload=()=>{
+          const id = inp.dataset.imgfor;
+          state.images[id]=img;
+          const c = containers[id];
+          c.imgScale=1; c.imgOffsetX=0; c.imgOffsetY=0; c.imgRotation=0;
+          enterPhotoEditMode(id);
+        };
+        img.src=ev.target.result;
+      };
+      reader.readAsDataURL(file);
+      e.target.value='';
+    });
+  });
+  cont.querySelectorAll('[data-editphoto]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.editphoto;
+      if(editingPhotoId===id){ exitPhotoEditMode(); return; }
+      const img = state.images[id];
+      if(!img){ alert('먼저 사진을 선택해주세요.'); return; }
+      enterPhotoEditMode(id);
+    });
+  });
+  cont.querySelectorAll('[data-photoreset]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const c = containers[btn.dataset.photoreset];
+      c.imgScale=1; c.imgOffsetX=0; c.imgOffsetY=0; c.imgRotation=0; draw();
+    });
+  });
+  cont.querySelectorAll('[data-creset]').forEach(btn=>btn.addEventListener('click', ()=>resetContainer(btn.dataset.creset)));
+}
+
+// ================= 사진 인라인 편집 (캔버스 위에서 직접 드래그/확대/회전) =================
+let editingPhotoId = null;
+function enterPhotoEditMode(id){
+  if(arrangeMode){ document.getElementById('arrangeChk').checked=false; arrangeMode=false; document.getElementById('canvasWrap').classList.remove('arranging'); }
+  editingPhotoId = id;
+  buildPhotoEditHandles();
+  draw();
+  refreshPhotoEditButtons();
+}
+function exitPhotoEditMode(){
+  editingPhotoId = null;
+  removePhotoEditHandles();
+  draw();
+  refreshPhotoEditButtons();
+}
+function refreshPhotoEditButtons(){
+  document.querySelectorAll('[data-editphoto]').forEach(btn=>{
+    const active = btn.dataset.editphoto===editingPhotoId;
+    btn.textContent = active ? '✅ 편집 완료' : '✏️ 사진 편집';
+    btn.classList.toggle('active', active);
+  });
+}
+function removePhotoEditHandles(){
+  ['peInlinePan','peInlineScale','peInlineRotate'].forEach(elId=>{ const el=document.getElementById(elId); if(el) el.remove(); });
+}
+function buildPhotoEditHandles(){
+  removePhotoEditHandles();
+  if(!editingPhotoId) return;
+  const c = containers[editingPhotoId];
+
+  const panDiv = document.createElement('div');
+  panDiv.id='peInlinePan';
+  panDiv.style.position='absolute';
+  panDiv.style.left=c.x+'px'; panDiv.style.top=c.y+'px';
+  panDiv.style.width=c.w+'px'; panDiv.style.height=c.h+'px';
+  panDiv.style.cursor='move'; panDiv.style.pointerEvents='auto';
+  panDiv.style.border='2px dashed #2980b9';
+  overlay.appendChild(panDiv);
+
+  const scaleHandle = document.createElement('div');
+  scaleHandle.id='peInlineScale'; scaleHandle.className='peHandle';
+  scaleHandle.style.position='absolute';
+  scaleHandle.style.left=(c.x+c.w-15)+'px'; scaleHandle.style.top=(c.y+c.h-15)+'px';
+  scaleHandle.style.pointerEvents='auto'; scaleHandle.style.cursor='nwse-resize';
+  scaleHandle.textContent='⤡';
+  overlay.appendChild(scaleHandle);
+
+  const rotateHandle = document.createElement('div');
+  rotateHandle.id='peInlineRotate'; rotateHandle.className='peHandle';
+  rotateHandle.style.position='absolute';
+  rotateHandle.style.left=(c.x+c.w/2-15)+'px'; rotateHandle.style.top=(c.y-38)+'px';
+  rotateHandle.style.pointerEvents='auto'; rotateHandle.style.cursor='grab';
+  rotateHandle.textContent='⟳';
+  overlay.appendChild(rotateHandle);
+
+  function screenCenter(){
+    const rect = canvasWrap.getBoundingClientRect();
+    return { x: rect.left+panX+(c.x+c.w/2)*currentZoom, y: rect.top+panY+(c.y+c.h/2)*currentZoom };
+  }
+  panDiv.addEventListener('pointerdown', e=>{
+    e.stopPropagation();
+    const start={mx:e.clientX,my:e.clientY,ox:c.imgOffsetX||0,oy:c.imgOffsetY||0};
+    const move=ev=>{
+      c.imgOffsetX = start.ox + (ev.clientX-start.mx)/currentZoom;
+      c.imgOffsetY = start.oy + (ev.clientY-start.my)/currentZoom;
+      draw();
+    };
+    const up=()=>{ window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); };
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+  });
+  scaleHandle.addEventListener('pointerdown', e=>{
+    e.stopPropagation();
+    const center = screenCenter();
+    const startDist = Math.max(20, Math.hypot(e.clientX-center.x, e.clientY-center.y));
+    const startScale = c.imgScale||1;
+    const move=ev=>{
+      const dist = Math.hypot(ev.clientX-center.x, ev.clientY-center.y);
+      c.imgScale = Math.max(0.3, Math.min(8, startScale*(dist/startDist)));
+      draw();
+    };
+    const up=()=>{ window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); };
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+  });
+  rotateHandle.addEventListener('pointerdown', e=>{
+    e.stopPropagation();
+    const center = screenCenter();
+    const startAngle = Math.atan2(e.clientY-center.y, e.clientX-center.x)*180/Math.PI;
+    const startRotation = c.imgRotation||0;
+    const move=ev=>{
+      const angle = Math.atan2(ev.clientY-center.y, ev.clientX-center.x)*180/Math.PI;
+      c.imgRotation = (startRotation + (angle-startAngle) + 360)%360;
+      draw();
+    };
+    const up=()=>{ window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); };
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+  });
+}
+function drawPhotoEditingContainer(c){
+  ctx.save();
+  roundRectPath(ctx,c.x,c.y,c.w,c.h,10);
+  ctx.fillStyle='#ffffff'; ctx.fill();
+  ctx.restore();
+  const img = state.images[c.__id];
+  if(img){
+    const rot=((c.imgRotation||0)%360)*Math.PI/180;
+    const baseScale=Math.max(c.w/img.width,c.h/img.height);
+    const scale=baseScale*(c.imgScale||1);
+    ctx.save();
+    ctx.globalAlpha=0.35;
+    ctx.translate(c.x+c.w/2+(c.imgOffsetX||0), c.y+c.h/2+(c.imgOffsetY||0));
+    ctx.rotate(rot);
+    ctx.drawImage(img,-img.width*scale/2,-img.height*scale/2,img.width*scale,img.height*scale);
+    ctx.restore();
+    ctx.save();
+    roundRectPath(ctx,c.x,c.y,c.w,c.h,10); ctx.clip();
+    ctx.translate(c.x+c.w/2+(c.imgOffsetX||0), c.y+c.h/2+(c.imgOffsetY||0));
+    ctx.rotate(rot);
+    ctx.drawImage(img,-img.width*scale/2,-img.height*scale/2,img.width*scale,img.height*scale);
+    ctx.restore();
+  }
+  ctx.save(); roundRectPath(ctx,c.x,c.y,c.w,c.h,10); ctx.lineWidth=3; ctx.strokeStyle='#2980b9'; ctx.setLineDash([9,5]); ctx.stroke(); ctx.restore();
+}
+
+// ================= 패널: 색상 칸 =================
+const COLOR_LABELS = {theme:'테마색',hair:'머리색',eye:'눈색',skin:'피부색'};
+function buildColorCards(){
+  const cont = document.getElementById('colorCards');
+  ['theme','hair','eye','skin'].forEach(key=>{
+    const card = document.createElement('div'); card.className='card';
+    card.innerHTML = `<div class="cardHead"><div class="cardTitle">${COLOR_LABELS[key]} (A / B)</div></div>`;
+    ['A','B'].forEach(side=>{
+      const id = side+'_'+key; const c = containers[id];
+      const sub = document.createElement('div'); sub.style.marginBottom='6px'; sub.style.paddingBottom='6px'; sub.style.borderBottom='1px dashed #eee';
+      sub.innerHTML = `<div class="row"><span class="lbl">${side}측 색상</span>
+        <input type="color" data-colorfor="${id}" value="${c.fill}">
+        <input type="text" class="hex" data-hexfor="${id}" value="${c.fill}">
+        <button class="miniBtn" data-creset="${id}">칸 초기화</button></div>`;
+      sub.appendChild(borderRow(id, c, draw));
+      sub.appendChild(badgeMiniRow(side+'_'+key+'_cap'));
+      card.appendChild(sub);
+    });
+    cont.appendChild(card);
+  });
+  cont.querySelectorAll('[data-colorfor]').forEach(inp=>inp.addEventListener('input', e=>{
+    containers[inp.dataset.colorfor].fill=e.target.value;
+    cont.querySelector(`[data-hexfor="${inp.dataset.colorfor}"]`).value=e.target.value;
+    syncBadgeColorToSwatch(inp.dataset.colorfor, e.target.value);
+    draw();
+  }));
+  cont.querySelectorAll('[data-hexfor]').forEach(inp=>inp.addEventListener('change', e=>{
+    let v=e.target.value.trim(); if(!v.startsWith('#')) v='#'+v; if(!/^#[0-9a-fA-F]{6}$/.test(v)) return;
+    containers[inp.dataset.hexfor].fill=v;
+    cont.querySelector(`[data-colorfor="${inp.dataset.hexfor}"]`).value=v;
+    syncBadgeColorToSwatch(inp.dataset.hexfor, v);
+    draw();
+  }));
+  cont.querySelectorAll('[data-creset]').forEach(btn=>btn.addEventListener('click', ()=>resetContainer(btn.dataset.creset)));
+}
+function syncBadgeColorToSwatch(containerId, fillColor){
+  const badgeId = containerId+'_cap';
+  const b = badges[badgeId]; if(!b) return;
+  b.bgColor = fillColor;
+  b.textColor = contrastColor(fillColor);
+  const bgInp = document.querySelector(`[data-bcol="bg"][data-id="${badgeId}"]`); if(bgInp) bgInp.value = fillColor;
+  const fgInp = document.querySelector(`[data-bcol="fg"][data-id="${badgeId}"]`); if(fgInp) fgInp.value = b.textColor;
+}
+
+// ================= 패널: 텍스트 칸 (선택형 통합 인스펙터) =================
+const PAIR_TEXT_FIELDS = [{id:'pairName', label:'페어명'}, {id:'A_affil', label:'A 소속·신체정보'}, {id:'B_affil', label:'B 소속·신체정보'}];
+const TEXT_FIELDS = [
+  {id:'A_info', label:'A 성격·포인트·NG'}, {id:'B_info', label:'B 성격·포인트·NG'},
+  {id:'relation', label:'관계성 내용'},
+];
+function buildTextInspector(mountId, fieldList){
+  const cont = document.getElementById(mountId);
+  let currentId = fieldList[0].id;
+  const wrap = document.createElement('div'); wrap.className='card';
+  wrap.innerHTML = `
+    <select class="tiny" id="${mountId}_select" style="width:100%; margin-bottom:8px; padding:5px;">
+      ${fieldList.map(f=>`<option value="${f.id}">${f.label}</option>`).join('')}
+    </select>
+    <div id="${mountId}_content"></div>
+    <div class="row">
+      <select class="tiny" data-k="family"><option value="gothic">고딕</option><option value="serif">세리프</option><option value="round">둥근고딕</option></select>
+      <select class="tiny" data-k="weight"><option value="400">Regular</option><option value="700">Bold</option><option value="900">Black</option></select>
+    </div>
+    <div class="row">
+      <span class="lbl">크기</span><input type="range" min="8" max="60" data-k="size">
+      <span class="lbl">행간</span><input type="range" min="1" max="2.4" step="0.1" data-k="lineHeight">
+    </div>
+    <div class="row">
+      <button class="pill" data-align="left">왼쪽</button>
+      <button class="pill" data-align="center">중앙</button>
+      <button class="pill" data-align="right">오른쪽</button>
+      <button class="pill" data-k="underline">밑줄</button>
+      <input type="color" data-k="color">
+    </div>
+    <div class="row">
+      <span class="lbl">테두리</span>
+      <input type="checkbox" data-k="showBorder">
+      <input type="color" data-k="borderColor">
+      <input type="number" class="bw" data-k="borderWidth" min="0" max="12" step="0.5">
+      <button class="miniBtn" data-k="reset">칸 초기화</button>
+    </div>`;
+  cont.appendChild(wrap);
+
+  const contentDiv = wrap.querySelector(`#${mountId}_content`);
+  const selectEl = wrap.querySelector(`#${mountId}_select`);
+
+  function renderContentInput(){
+    const c = containers[currentId];
+    contentDiv.innerHTML = c.multiline
+      ? `<textarea placeholder="${c.placeholder}"></textarea>`
+      : `<input type="text" class="txt" placeholder="${c.placeholder}">`;
+    const inputEl = contentDiv.querySelector('textarea,input');
+    inputEl.value = c.value||'';
+    inputEl.addEventListener('input', e=>{ containers[currentId].value = e.target.value; draw(); });
+  }
+  function refreshControls(){
+    const c = containers[currentId];
+    wrap.querySelector('[data-k=family]').value = c.family;
+    wrap.querySelector('[data-k=weight]').value = String(c.weight);
+    wrap.querySelector('[data-k=size]').value = c.size;
+    wrap.querySelector('[data-k=lineHeight]').value = c.lineHeight;
+    wrap.querySelectorAll('[data-align]').forEach(b=>b.classList.toggle('active', b.dataset.align===c.align));
+    wrap.querySelector('[data-k=underline]').classList.toggle('active', c.underline);
+    wrap.querySelector('[data-k=color]').value = c.color;
+    wrap.querySelector('[data-k=showBorder]').checked = c.showBorder;
+    wrap.querySelector('[data-k=borderColor]').value = c.borderColor;
+    wrap.querySelector('[data-k=borderWidth]').value = c.borderWidth;
+    renderContentInput();
+  }
+  selectEl.addEventListener('change', e=>{ currentId = e.target.value; refreshControls(); });
+  wrap.querySelector('[data-k=family]').addEventListener('change', e=>{ containers[currentId].family=e.target.value; syncMirrorStyle(currentId,'family',e.target.value); draw(); });
+  wrap.querySelector('[data-k=weight]').addEventListener('change', e=>{ containers[currentId].weight=parseInt(e.target.value); syncMirrorStyle(currentId,'weight',containers[currentId].weight); draw(); });
+  wrap.querySelector('[data-k=size]').addEventListener('input', e=>{ containers[currentId].size=parseInt(e.target.value); syncMirrorStyle(currentId,'size',containers[currentId].size); draw(); });
+  wrap.querySelector('[data-k=lineHeight]').addEventListener('input', e=>{ containers[currentId].lineHeight=parseFloat(e.target.value); syncMirrorStyle(currentId,'lineHeight',containers[currentId].lineHeight); draw(); });
+  wrap.querySelectorAll('[data-align]').forEach(btn=>btn.addEventListener('click', ()=>{
+    containers[currentId].align = btn.dataset.align;
+    wrap.querySelectorAll('[data-align]').forEach(b=>b.classList.toggle('active', b===btn));
+    syncMirrorStyle(currentId,'align',btn.dataset.align);
+    draw();
+  }));
+  wrap.querySelector('[data-k=underline]').addEventListener('click', e=>{
+    const c = containers[currentId]; c.underline=!c.underline; e.target.classList.toggle('active', c.underline);
+    syncMirrorStyle(currentId,'underline',c.underline); draw();
+  });
+  wrap.querySelector('[data-k=color]').addEventListener('input', e=>{
+    containers[currentId].color=e.target.value; syncMirrorStyle(currentId,'color',e.target.value); draw();
+  });
+  wrap.querySelector('[data-k=showBorder]').addEventListener('change', e=>{ containers[currentId].showBorder=e.target.checked; draw(); });
+  wrap.querySelector('[data-k=borderColor]').addEventListener('input', e=>{ containers[currentId].borderColor=e.target.value; draw(); });
+  wrap.querySelector('[data-k=borderWidth]').addEventListener('input', e=>{ containers[currentId].borderWidth=parseFloat(e.target.value)||0; draw(); });
+  wrap.querySelector('[data-k=reset]').addEventListener('click', ()=>{ resetContainer(currentId); refreshControls(); });
+
+  refreshControls();
+}
+// A/B 대응 칸의 텍스트 스타일(크기/행간/폰트/굵기/정렬/밑줄/색상)을 상대편에도 반영 (내용/글자는 동기화하지 않음, DOM은 인스펙터가 선택시점에 다시 읽으므로 값만 갱신)
+function syncMirrorStyle(id, prop, value){
+  const c = containers[id];
+  if(!c || !c.mirrorId) return;
+  containers[c.mirrorId][prop] = value;
+}
+
+// ================= 패널: 캐릭터 이름 배지 (페어 정보 폴더 안에 배치) =================
+function buildNameBadgeCards(containerId){
+  const cont = document.getElementById(containerId);
+  ['A_name','B_name'].forEach(id=>{
+    const card = document.createElement('div'); card.className='card';
+    card.innerHTML = `<div class="cardHead"><div class="cardTitle">${id.startsWith('A')?'A':'B'} 캐릭터 이름 배지</div></div>`;
+    card.appendChild(badgeMiniRow(id));
+    cont.appendChild(card);
+  });
+}
+
+// ================= 패널: 장식 이미지 =================
+function buildDecoPanel(){
+  const list = document.getElementById('decoList'); list.innerHTML='';
+  Object.keys(decorations).forEach(id=>{
+    const row = document.createElement('div'); row.className='decoItem';
+    row.innerHTML = `<span>${id}</span><button data-remove="${id}">삭제</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click', ()=>{
+    delete decorations[btn.dataset.remove]; buildDecoPanel(); buildOverlay(); draw();
+  }));
+}
+document.getElementById('addDecoBtn').addEventListener('click', ()=>document.getElementById('decoFileInput').click());
+document.getElementById('decoFileInput').addEventListener('change', e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      decoCounter++; const id='deco_'+decoCounter;
+      const w=Math.min(220,img.width), h=w*(img.height/img.width);
+      decorations[id]={x:snap(AXIS-w/2), y:snap(400), w:snap(w), h:snap(h), img};
+      buildDecoPanel(); buildOverlay(); draw();
+    };
+    img.src=ev.target.result;
+  };
+  reader.readAsDataURL(file); e.target.value='';
+});
+
+// ================= 정렬 모드: 드래그/리사이즈 (컨테이너/장식 - 겹침 판정) =================
+const overlay = document.getElementById('overlay');
+let arrangeMode=false;
+let selId=null, dragMode=null, dragStart=null, dragGroup=null;
+let activeGuides = [];
+const GUIDE_THRESHOLD = 8;
+
+function applyAlignGuides(obj, excludeId){
+  activeGuides = [];
+  const others = groupItems('container').filter(it=>it.id!==excludeId && it.id!==obj.mirrorId);
+  const candX = [AXIS], candY = [CH/2];
+  others.forEach(it=>{
+    candX.push(it.obj.x, it.obj.x+it.obj.w/2, it.obj.x+it.obj.w);
+    candY.push(it.obj.y, it.obj.y+it.obj.h/2, it.obj.y+it.obj.h);
+  });
+  const edgesX = [{k:'x',v:obj.x},{k:'cx',v:obj.x+obj.w/2},{k:'x2',v:obj.x+obj.w}];
+  const edgesY = [{k:'y',v:obj.y},{k:'cy',v:obj.y+obj.h/2},{k:'y2',v:obj.y+obj.h}];
+  let bestX=null, bestY=null;
+  edgesX.forEach(e=>{ candX.forEach(c=>{ if(Math.abs(e.v-c)<GUIDE_THRESHOLD && (!bestX||Math.abs(e.v-c)<bestX.diff)) bestX={edge:e,c,diff:Math.abs(e.v-c)}; }); });
+  edgesY.forEach(e=>{ candY.forEach(c=>{ if(Math.abs(e.v-c)<GUIDE_THRESHOLD && (!bestY||Math.abs(e.v-c)<bestY.diff)) bestY={edge:e,c,diff:Math.abs(e.v-c)}; }); });
+  if(bestX){
+    const delta = bestX.c - bestX.edge.v; obj.x += delta;
+    activeGuides.push({type:'v', pos:bestX.c});
+  }
+  if(bestY){
+    const delta = bestY.c - bestY.edge.v; obj.y += delta;
+    activeGuides.push({type:'h', pos:bestY.c});
+  }
+}
+
+function groupItems(g){
+  if(g==='container') return Object.keys(containers).map(k=>({id:k,obj:containers[k]}));
+  if(g==='decoration') return Object.keys(decorations).map(k=>({id:k,obj:decorations[k]}));
+  return [];
+}
+function checkValidity(id,obj,group){
+  const others = groupItems(group).filter(it=>it.id!==id);
+  return !others.some(it=>overlapBoxes(obj,it.obj));
+}
+function buildOverlay(){
+  overlay.innerHTML='';
+  const specs = [
+    ...Object.keys(containers).map(id=>({id,obj:containers[id],group:'container',cls:'g-container'})),
+    ...Object.keys(decorations).map(id=>({id,obj:decorations[id],group:'decoration',cls:'g-decoration'})),
+    ...Object.keys(badges).map(id=>({id,obj:badges[id],group:'badge',cls:'g-badge'})),
+  ];
+  specs.forEach(spec=>{
+    const div=document.createElement('div');
+    div.className='box '+spec.cls; div.dataset.id=spec.id; div.dataset.group=spec.group;
+    const handle=document.createElement('div'); handle.className='handle'; div.appendChild(handle);
+    overlay.appendChild(div);
+
+    div.addEventListener('pointerdown', e=>{
+      if(!arrangeMode) return;
+      e.stopPropagation();
+      selId=spec.id; dragGroup=spec.group;
+      dragMode=(e.target===handle)?'resize':'move';
+      dragStart={mx:e.clientX,my:e.clientY,box:{...spec.obj}, mirrorBox: spec.obj.mirrorId?{...containers[spec.obj.mirrorId]}:null};
+      e.target.setPointerCapture(e.pointerId);
+    });
+    div.addEventListener('pointermove', e=>{
+      if(dragMode && selId===spec.id){
+        const dx=(e.clientX-dragStart.mx)/currentZoom;
+        const dy=(e.clientY-dragStart.my)/currentZoom;
+        const obj=spec.obj, b=dragStart.box;
+
+        if(dragGroup==='badge'){
+          // 배지는 부모 컨테이너 기준 상대좌표(offsetX/offsetY)를 갖는다 - 그룹화 유지, 자유 이동/크기조절
+          if(dragMode==='move'){ obj.offsetX=snap(b.offsetX+dx); obj.offsetY=snap(b.offsetY+dy); }
+          else { obj.w=snap(Math.max(20,b.w+dx)); obj.h=snap(Math.max(14,b.h+dy)); }
+          draw();
+          return;
+        }
+
+        if(dragMode==='move'){ obj.x=snap(b.x+dx); obj.y=snap(b.y+dy); }
+        else { obj.w=snap(Math.max(30,b.w+dx)); obj.h=snap(Math.max(24,b.h+dy)); }
+        if(dragGroup==='container' && dragMode==='resize' && obj.mirrorId){
+          const m=containers[obj.mirrorId]; const mb=mirrorBox(obj); m.x=mb.x;m.y=mb.y;m.w=mb.w;m.h=mb.h;
+        }
+        if(dragGroup==='container' && dragMode==='move'){
+          applyAlignGuides(obj, spec.id);
+          if(obj.mirrorId){ const m=containers[obj.mirrorId]; /* 이동은 대칭 강제 없음, 가이드만 표시 */ }
+        } else {
+          activeGuides = [];
+        }
+        let valid = checkValidity(spec.id, obj, dragGroup);
+        if(dragGroup==='container' && obj.mirrorId){
+          valid = valid && checkValidity(obj.mirrorId, containers[obj.mirrorId], 'container');
+        }
+        div.classList.toggle('valid', valid);
+        div.classList.toggle('invalid', !valid);
+        div.dataset.valid = valid ? '1':'0';
+        draw();
+      }
+    });
+    div.addEventListener('pointerup', ()=>{
+      activeGuides = [];
+      if(dragMode && selId===spec.id && dragGroup!=='badge'){
+        const valid = div.dataset.valid==='1';
+        if(!valid){
+          Object.assign(spec.obj, dragStart.box);
+          if(dragGroup==='container' && spec.obj.mirrorId && dragStart.mirrorBox){
+            Object.assign(containers[spec.obj.mirrorId], dragStart.mirrorBox);
+          }
+        }
+        div.classList.remove('valid','invalid');
+        draw();
+      }
+      dragMode=null;
+    });
+  });
+}
+function syncOverlay(){
+  overlay.querySelectorAll('.box').forEach(div=>{
+    const g=div.dataset.group;
+    let obj = g==='container'?containers[div.dataset.id]:g==='decoration'?decorations[div.dataset.id]:badges[div.dataset.id];
+    if(!obj){ div.remove(); return; }
+    const box = g==='badge' ? badgeAbsBox(obj) : obj;
+    div.style.left=box.x+'px'; div.style.top=box.y+'px'; div.style.width=box.w+'px'; div.style.height=box.h+'px';
+  });
+}
+document.getElementById('arrangeChk').addEventListener('change', e=>{
+  arrangeMode = e.target.checked;
+  document.getElementById('canvasWrap').classList.toggle('arranging', arrangeMode);
+  if(arrangeMode && editingPhotoId) exitPhotoEditMode();
+  draw();
+});
+document.getElementById('resetAllBtn').addEventListener('click', ()=>{
+  if(confirm('모든 칸/배지의 위치·크기·테두리를 초기 상태로 되돌릴까요? (사진·텍스트·색상 내용은 유지됩니다)')) resetAllLayout();
+});
+
+// ================= 뷰포트 팬 / 줌 (돋보기 방식) =================
+const canvasWrap = document.getElementById('canvasWrap');
+const viewport = document.getElementById('viewport');
+let currentZoom = 0.45, panX=0, panY=0;
+function applyTransform(){
+  viewport.style.transform = `translate(${panX}px,${panY}px) scale(${currentZoom})`;
+}
+function fitToScreen(){
+  const rect = canvasWrap.getBoundingClientRect();
+  currentZoom = Math.min(rect.width/CW, rect.height/CH) * 0.94;
+  panX = (rect.width - CW*currentZoom)/2;
+  panY = (rect.height - CH*currentZoom)/2;
+  applyTransform();
+}
+canvasWrap.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const rect = canvasWrap.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  const contentX = (mx-panX)/currentZoom, contentY=(my-panY)/currentZoom;
+  const factor = e.deltaY<0 ? 1.12 : 1/1.12;
+  currentZoom = Math.min(4, Math.max(0.12, currentZoom*factor));
+  panX = mx - contentX*currentZoom;
+  panY = my - contentY*currentZoom;
+  applyTransform();
+}, {passive:false});
+
+let panning=false, panStart=null;
+canvasWrap.addEventListener('pointerdown', e=>{
+  if(e.target.closest('.box')) return; // 칸을 직접 드래그하는 경우는 팬 제외
+  panning=true; canvasWrap.classList.add('panning');
+  panStart={mx:e.clientX,my:e.clientY,px:panX,py:panY};
+});
+window.addEventListener('pointermove', e=>{
+  if(panning){
+    panX = panStart.px + (e.clientX-panStart.mx);
+    panY = panStart.py + (e.clientY-panStart.my);
+    applyTransform();
+  }
+});
+window.addEventListener('pointerup', ()=>{ panning=false; canvasWrap.classList.remove('panning'); });
+document.getElementById('fitBtn').addEventListener('click', fitToScreen);
+
+document.querySelectorAll('[data-wm]').forEach(btn=>{
+  if(btn.dataset.wm===watermarkCorner) btn.classList.add('active');
+  btn.addEventListener('click', ()=>{
+    watermarkCorner = btn.dataset.wm;
+    document.querySelectorAll('[data-wm]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    draw();
+  });
+});
+
+// ================= 초기화 =================
+document.getElementById('addFontBtnPair').addEventListener('click', ()=>document.getElementById('fontFileInputPair').click());
+document.getElementById('fontFileInputPair').addEventListener('change', e=>{
+  const file = e.target.files[0]; if(!file) return;
+  handleFontUpload(file);
+  e.target.value='';
+});
+document.getElementById('addFontBtn').addEventListener('click', ()=>document.getElementById('fontFileInput').click());
+document.getElementById('fontFileInput').addEventListener('change', e=>{
+  const file = e.target.files[0]; if(!file) return;
+  handleFontUpload(file);
+  e.target.value='';
+});
+
+buildTextInspector('pairTextInspector', PAIR_TEXT_FIELDS);
+buildNameBadgeCards('pairInfoCards');
+buildImageCards(); buildColorCards();
+buildTextInspector('textInspector', TEXT_FIELDS);
+buildDecoPanel();
+buildOverlay();
+window.addEventListener('load', fitToScreen);
+setTimeout(fitToScreen, 50);
+draw();
+
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  const link=document.createElement('a'); link.download='창작외관표_완성.png'; link.href=canvas.toDataURL('image/png'); link.click();
+});
+</script>
+</body>
+</html>
